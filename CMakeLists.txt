@@ -28,6 +28,7 @@ target_link_libraries(FlowFrameX PRIVATE
     d3dcompiler
     dwmapi
     dxguid
+    winmm
 )
 
 # Copy shaders next to the exe
