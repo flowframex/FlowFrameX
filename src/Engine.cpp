@@ -110,24 +110,37 @@ bool Engine::InitWindow() {
     wc.cbSize        = sizeof(wc);
     wc.lpfnWndProc   = WndProc;
     wc.hInstance     = GetModuleHandleW(nullptr);
+    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wc.lpszClassName = L"FlowFrameX";
     RegisterClassExW(&wc);
 
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+    // Start as a normal window in the corner so it doesn't black out your screen
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_TRANSPARENT,
-        L"FlowFrameX", L"FlowFrameX v2.0",
-        WS_POPUP | WS_VISIBLE,
-        0, 0,
-        GetSystemMetrics(SM_CXSCREEN),
-        GetSystemMetrics(SM_CYSCREEN),
+        WS_EX_TOPMOST,
+        L"FlowFrameX", L"FlowFrameX v2.0 - Press ESC to exit",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        0, 0,                   // top-left corner
+        screenW / 2, screenH / 2, // half screen size for testing
         nullptr, nullptr, wc.hInstance, nullptr
     );
-    return m_hwnd != nullptr;
+
+    if (!m_hwnd) return false;
+
+    // Give it focus so ESC works
+    SetForegroundWindow(m_hwnd);
+    SetFocus(m_hwnd);
+    printf("[INFO] Window created. Press ESC inside the window to exit.\n");
+    return true;
 }
 
 bool Engine::InitD3D() {
-    int w = GetSystemMetrics(SM_CXSCREEN);
-    int h = GetSystemMetrics(SM_CYSCREEN);
+    RECT rc{};
+    GetClientRect(m_hwnd, &rc);
+    int w = rc.right  - rc.left;
+    int h = rc.bottom - rc.top;
 
     DXGI_SWAP_CHAIN_DESC sd{};
     sd.BufferCount                        = 2;
@@ -181,6 +194,10 @@ void Engine::ProcessFrame() {
     // 1. Grab latest screen frame via Desktop Duplication
     ID3D11Texture2D* rawFrame = m_capture->AcquireFrame(m_ctx.Get());
     if (!rawFrame) return;  // no new frame yet, skip
+
+    static int frameCount = 0;
+    if (++frameCount % 60 == 0)
+        printf("[RUNNING] Frames processed: %d\n", frameCount);
 
     // 2. Shift history: N-1 = N, N = rawFrame
     m_ctx->CopyResource(m_frameNm1.Get(), m_frameN.Get());
