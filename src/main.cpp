@@ -42,16 +42,21 @@ static bool CheckRequirements() {
         }
     }
 
-    // Check 3: Is Windows 10 or higher?
-    OSVERSIONINFOEXW osvi{};
-    osvi.dwOSVersionInfoSize = sizeof(osvi);
-    osvi.dwMajorVersion = 10;
-    DWORDLONG mask = VerSetConditionMask(0, VER_MAJORVERSION, VER_GREATER_EQUAL);
-    if (!VerifyVersionInfoW(&osvi, VER_MAJORVERSION, mask)) {
-        printf("[ERROR] Windows 10 or higher required for Desktop Duplication API\n\n");
-        ok = false;
+    // Check 3: Is Windows 8 or higher? (RtlGetVersion tells the truth unlike VerifyVersionInfo)
+    using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOEXW*);
+    auto rtlGetVersion = (RtlGetVersionFn)GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion");
+    if (rtlGetVersion) {
+        OSVERSIONINFOEXW osvi{};
+        osvi.dwOSVersionInfoSize = sizeof(osvi);
+        rtlGetVersion(&osvi);
+        printf("[OK] Windows version: %lu.%lu (Build %lu)\n",
+               osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+        if (osvi.dwMajorVersion < 8) {
+            printf("[ERROR] Windows 8 or higher required\n\n");
+            ok = false;
+        }
     } else {
-        printf("[OK] Windows version OK\n");
+        printf("[OK] Windows version check skipped (assuming OK)\n");
     }
 
     printf("\n[INFO] If a game is running in FULLSCREEN EXCLUSIVE mode,\n");
