@@ -24,28 +24,53 @@ Engine::Engine()  = default;
 Engine::~Engine() { Shutdown(); }
 
 bool Engine::Init() {
-    if (!InitWindow()) return false;
-    if (!InitD3D())    return false;
+    printf("[INIT] Creating window...\n");
+    if (!InitWindow()) { printf("[FAIL] InitWindow failed\n"); return false; }
+    printf("[OK]   Window created\n");
 
-    m_capture   = std::make_unique<Capture>();
-    m_motion    = std::make_unique<MotionEstimator>();
-    m_sceneCut  = std::make_unique<SceneCut>();
-    m_extrap    = std::make_unique<Extrapolator>();
-    m_pacer     = std::make_unique<FramePacer>();
+    printf("[INIT] Creating D3D11 device...\n");
+    if (!InitD3D()) { printf("[FAIL] InitD3D failed - DirectX 11 not available?\n"); return false; }
+    printf("[OK]   D3D11 device created\n");
 
+    printf("[INIT] Creating Capture (Desktop Duplication)...\n");
+    m_capture = std::make_unique<Capture>();
     if (!m_capture->Init(m_device.Get())) {
-        MessageBoxA(nullptr, "Desktop Duplication failed.\nMake sure you run as Administrator.", "FlowFrameX", MB_ICONERROR);
+        printf("[FAIL] Desktop Duplication failed!\n");
+        printf("       Causes:\n");
+        printf("       - Game running in FULLSCREEN EXCLUSIVE (use borderless windowed)\n");
+        printf("       - Two GPUs in PC (disable iGPU in Device Manager)\n");
+        printf("       - Remote desktop / virtual machine (not supported)\n");
         return false;
     }
-
     m_width  = m_capture->Width();
     m_height = m_capture->Height();
+    printf("[OK]   Capture ready - screen size: %dx%d\n", m_width, m_height);
 
-    if (!m_motion->Init(m_device.Get(), m_width, m_height))   return false;
-    if (!m_extrap->Init(m_device.Get(), m_width, m_height))   return false;
-    if (!m_sceneCut->Init(m_device.Get(), m_width, m_height)) return false;
+    printf("[INIT] Creating MotionEstimator...\n");
+    m_motion = std::make_unique<MotionEstimator>();
+    if (!m_motion->Init(m_device.Get(), m_width, m_height)) {
+        printf("[FAIL] MotionEstimator init failed - shader compile error?\n");
+        return false;
+    }
+    printf("[OK]   MotionEstimator ready\n");
 
-    // Allocate frame history textures
+    printf("[INIT] Creating Extrapolator...\n");
+    m_extrap = std::make_unique<Extrapolator>();
+    if (!m_extrap->Init(m_device.Get(), m_width, m_height)) {
+        printf("[FAIL] Extrapolator init failed - shader compile error?\n");
+        return false;
+    }
+    printf("[OK]   Extrapolator ready\n");
+
+    printf("[INIT] Creating SceneCut detector...\n");
+    m_sceneCut = std::make_unique<SceneCut>();
+    if (!m_sceneCut->Init(m_device.Get(), m_width, m_height)) {
+        printf("[FAIL] SceneCut init failed\n");
+        return false;
+    }
+    printf("[OK]   SceneCut ready\n");
+
+    printf("[INIT] Allocating frame textures...\n");
     D3D11_TEXTURE2D_DESC td{};
     td.Width            = m_width;
     td.Height           = m_height;
@@ -56,12 +81,26 @@ bool Engine::Init() {
     td.Usage            = D3D11_USAGE_DEFAULT;
     td.BindFlags        = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 
-    m_device->CreateTexture2D(&td, nullptr, m_frameN.ReleaseAndGetAddressOf());
-    m_device->CreateTexture2D(&td, nullptr, m_frameNm1.ReleaseAndGetAddressOf());
-    m_device->CreateShaderResourceView(m_frameN.Get(),   nullptr, m_frameN_SRV.ReleaseAndGetAddressOf());
-    m_device->CreateShaderResourceView(m_frameNm1.Get(), nullptr, m_frameNm1_SRV.ReleaseAndGetAddressOf());
+    HRESULT hr;
+    hr = m_device->CreateTexture2D(&td, nullptr, m_frameN.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) { printf("[FAIL] CreateTexture2D frameN failed: 0x%08X\n", hr); return false; }
+    hr = m_device->CreateTexture2D(&td, nullptr, m_frameNm1.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) { printf("[FAIL] CreateTexture2D frameNm1 failed: 0x%08X\n", hr); return false; }
+    hr = m_device->CreateShaderResourceView(m_frameN.Get(), nullptr, m_frameN_SRV.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) { printf("[FAIL] CreateSRV frameN failed: 0x%08X\n", hr); return false; }
+    hr = m_device->CreateShaderResourceView(m_frameNm1.Get(), nullptr, m_frameNm1_SRV.ReleaseAndGetAddressOf());
+    if (FAILED(hr)) { printf("[FAIL] CreateSRV frameNm1 failed: 0x%08X\n", hr); return false; }
+    printf("[OK]   Frame textures allocated\n");
 
-    m_pacer->Init(60);  // target 60fps pacing
+    printf("[INIT] Starting frame pacer at 60fps...\n");
+    m_pacer = std::make_unique<FramePacer>();
+    m_pacer->Init(60);
+    printf("[OK]   Frame pacer ready\n");
+
+    printf("\n[OK] ALL SYSTEMS GO - Engine running!\n");
+    printf("     The overlay is now active on your screen.\n");
+    printf("     Press ESC on the overlay window to stop.\n\n");
+
     m_running = true;
     return true;
 }
@@ -115,7 +154,10 @@ bool Engine::InitD3D() {
         &gotLevel,
         m_ctx.ReleaseAndGetAddressOf()
     );
-    if (FAILED(hr)) return false;
+    if (FAILED(hr)) {
+        printf("[FAIL] D3D11CreateDeviceAndSwapChain error code: 0x%08X\n", hr);
+        return false;
+    }
 
     ComPtr<ID3D11Texture2D> backbuf;
     m_swapChain->GetBuffer(0, IID_PPV_ARGS(backbuf.ReleaseAndGetAddressOf()));
