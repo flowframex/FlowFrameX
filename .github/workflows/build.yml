@@ -1,0 +1,59 @@
+name: Build FlowFrameX
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:   # lets you trigger manually from GitHub UI
+
+jobs:
+  build:
+    name: Build (Windows MSVC)
+    runs-on: windows-latest   # GT 730 target = Windows only
+
+    steps:
+      # ── 1. Checkout your code ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Set up MSVC (Visual Studio 2022 build tools) ───────────────────
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      # ── 3. Configure with CMake ────────────────────────────────────────────
+      - name: Configure CMake (Release)
+        run: |
+          cmake -B build -S . `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DCMAKE_BUILD_TYPE=Release
+
+      # ── 4. Build ───────────────────────────────────────────────────────────
+      - name: Build
+        run: |
+          cmake --build build --config Release --parallel
+
+      # ── 5. Collect artifacts (exe + shaders) ──────────────────────────────
+      - name: Collect output files
+        run: |
+          mkdir -p dist
+          copy build\Release\FlowFrameX.exe dist\
+          xcopy /E /I build\Release\shaders dist\shaders
+
+      # ── 6. Upload as GitHub artifact (download from Actions tab) ───────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlowFrameX-Release
+          path: dist/
+          retention-days: 30
+
+      # ── 7. (Optional) Create a GitHub Release on version tags ──────────────
+      # Uncomment this block if you push tags like v1.0, v2.0 etc.
+      #
+      # - name: Create Release
+      #   if: startsWith(github.ref, 'refs/tags/v')
+      #   uses: softprops/action-gh-release@v2
+      #   with:
+      #     files: dist/*
