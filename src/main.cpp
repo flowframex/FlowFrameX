@@ -2,15 +2,6 @@
 #include <cstdio>
 #include "Engine.h"
 
-// Force a console window so we can see what's going wrong
-static void OpenConsole() {
-    AllocConsole();
-    FILE* f;
-    freopen_s(&f, "CONOUT$", "w", stdout);
-    freopen_s(&f, "CONOUT$", "w", stderr);
-    SetConsoleTitleW(L"FlowFrameX Debug Console");
-}
-
 static bool CheckRequirements() {
     bool ok = true;
 
@@ -70,8 +61,9 @@ static bool CheckRequirements() {
     return ok;
 }
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    OpenConsole();
+int main() {
+    // Console is automatic now (no WIN32 subsystem)
+    // Window stays open until we explicitly exit
 
     printf("========================================\n");
     printf("  FlowFrameX v2.0 -- Starting up...\n");
