@@ -9,7 +9,7 @@ if(NOT WIN32)
     message(FATAL_ERROR "FlowFrameX only supports Windows (DirectX 11)")
 endif()
 
-add_executable(FlowFrameX WIN32
+add_executable(FlowFrameX
     src/main.cpp
     src/Engine.cpp
     src/Capture.cpp
@@ -28,7 +28,6 @@ target_link_libraries(FlowFrameX PRIVATE
     d3dcompiler
     dwmapi
     dxguid
-    winmm
 )
 
 # Copy shaders next to the exe
